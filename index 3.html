@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Expense Tracker</title>
+<style>
+:root{--bg:#f7f7f8;--card:#fff;--ink:#18181b;--mute:#71717a;--line:#e8e8ec;--acc:#18181b;--inc:#16a34a;--exp:#e11d48}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:560px;margin:0 auto;padding:20px 16px 48px}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.top h1{font-size:20px;margin:0;font-weight:700}
+.link{border:0;background:none;color:var(--mute);font:inherit;font-size:14px;cursor:pointer}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+.balance small{color:var(--mute);font-size:14px}
+.balance .n{font-size:40px;font-weight:700;letter-spacing:-1px;margin:2px 0 14px}
+.stats{display:flex;gap:24px}
+.stats div{font-size:13px;color:var(--mute)}
+.stats b{display:block;font-size:18px;color:var(--ink)}
+.stats .i b{color:var(--inc)}.stats .e b{color:var(--exp)}
+h2{font-size:16px;margin:0 0 12px;font-weight:600}
+.seg{display:flex;background:var(--bg);border-radius:10px;padding:3px;margin-bottom:12px}
+.seg button{flex:1;border:0;background:none;font:inherit;font-weight:600;color:var(--mute);padding:9px;border-radius:8px;cursor:pointer}
+.seg button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
+input,select{width:100%;font:inherit;color:var(--ink);background:#fff;border:1px solid var(--line);border-radius:10px;padding:11px 12px;min-height:44px}
+input:focus,select:focus{outline:2px solid var(--acc);outline-offset:-1px}
+.g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.btn{width:100%;margin-top:14px;border:0;border-radius:10px;background:var(--acc);color:#fff;font:inherit;font-weight:600;padding:13px;cursor:pointer}
+.btn:disabled{opacity:.5}
+.msg{font-size:13px;color:var(--exp);min-height:18px;margin-top:8px}
+.head{display:flex;justify-content:space-between;align-items:center}
+.head select{width:auto;min-height:38px;padding:6px 10px}
+.bar{margin:12px 0 0}.bar .t{display:flex;justify-content:space-between;font-size:14px}
+.bar .t span:last-child{color:var(--mute)}
+.bar .tr{height:6px;background:var(--bg);border-radius:4px;margin-top:5px;overflow:hidden}
+.bar .tr i{display:block;height:100%;background:var(--ink);border-radius:4px}
+.day{font-size:13px;color:var(--mute);margin:16px 0 2px}
+.tx{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.tx:last-child{border-bottom:0}
+.tx .m{flex:1;min-width:0}.tx .m b{display:block;font-weight:600}
+.tx .m span{font-size:13px;color:var(--mute);overflow-wrap:anywhere}
+.amt{font-weight:600;white-space:nowrap}.amt.e{color:var(--exp)}.amt.i{color:var(--inc)}
+.del{border:0;background:none;color:var(--mute);font-size:20px;cursor:pointer;padding:4px 8px}
+.empty{color:var(--mute);text-align:center;padding:16px 0;font-size:14px}
+.hide{display:none}
+.auth{max-width:380px;margin:12vh auto 0}
+.auth h1{font-size:24px;margin:0 0 4px}.auth p{color:var(--mute);margin:0 0 8px}
+.warn{background:#fef3c7;border:1px solid #fcd34d;color:#78350f;border-radius:10px;padding:12px;font-size:14px;margin-bottom:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div id="cfgWarn" class="warn hide">Firebase is not configured yet. Paste your config into the <code>firebaseConfig</code> object in this file.</div>
+
+  <!-- Sign in -->
+  <div id="authView" class="auth hide">
+    <div class="card">
+      <h1>Expense Tracker</h1>
+      <p>Sign in to sync your data on all your devices.</p>
+      <label for="em">Email</label><input id="em" type="email" autocomplete="email">
+      <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" minlength="6">
+      <div class="msg" id="aerr"></div>
+      <button class="btn" id="signin" type="button">Sign in</button>
+      <button class="btn" id="signup" type="button" style="background:#fff;color:var(--ink);border:1px solid var(--line);margin-top:8px">Create account</button>
+    </div>
+  </div>
+
+  <!-- App -->
+  <div id="appView" class="hide">
+    <div class="top"><h1>Expense Tracker</h1><button class="link" id="out" type="button">Sign out</button></div>
+
+    <div class="card balance">
+      <small>Current balance</small>
+      <div class="n" id="bal">0 MAD</div>
+      <div class="stats">
+        <div class="i">Income this month<b id="inc">0</b></div>
+        <div class="e">Spent this month<b id="exp">0</b></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Add transaction</h2>
+      <div class="seg"><button class="on" id="bE" type="button">Expense</button><button id="bI" type="button">Income</button></div>
+      <label for="amount">Amount (MAD)</label>
+      <input id="amount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00">
+      <div class="g2">
+        <div><label for="cat">Category</label><select id="cat"></select></div>
+        <div><label for="date">Date</label><input id="date" type="date"></div>
+      </div>
+      <label for="note">Note (optional)</label>
+      <input id="note" type="text" maxlength="80" placeholder="e.g. Groceries">
+      <div class="msg" id="err"></div>
+      <button class="btn" id="add" type="button">Add</button>
+    </div>
+
+    <div class="card">
+      <div class="head"><h2 style="margin:0">Spending by category</h2><select id="month" aria-label="Month"></select></div>
+      <div id="cats"></div>
+    </div>
+
+    <div class="card">
+      <h2>Transactions</h2>
+      <div id="list"></div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeFirestore, persistentLocalCache, collection, addDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+
+// 1) PASTE YOUR FIREBASE CONFIG HERE (Firebase console > Project settings > Your apps > Web app)
+const firebaseConfig = {
+  apiKey: "AIzaSyBH3sKo79karzZFroIaotRWfajqAnBLDQw",
+  authDomain: "lmassarid-f4b7a.firebaseapp.com",
+  projectId: "lmassarid-f4b7a",
+  storageBucket: "lmassarid-f4b7a.firebasestorage.app",
+  messagingSenderId: "143876606574",
+  appId: "1:143876606574:web:e319b6204eb60b7900747f"
+};
+const CUR = "MAD";
+
+const EXP = ["Food","Transport","Rent","Bills","Health","Education","Shopping","Fun","Other"];
+const INC = ["Salary","Freelance","Gift","Other"];
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt = n => n.toLocaleString("en-US", {minimumFractionDigits:0, maximumFractionDigits:2});
+const today = () => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0,10); };
+const mLabel = k => new Date(k + "-01T00:00:00").toLocaleDateString("en-US", {month:"long", year:"numeric"});
+
+let tx = [], type = "e", month = "", uid = null, unsub = null;
+
+if (firebaseConfig.apiKey === "YOUR_API_KEY") { $("cfgWarn").classList.remove("hide"); $("authView").classList.add("hide"); throw new Error("Firebase config missing"); }
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = initializeFirestore(app, { localCache: persistentLocalCache() });
+
+function show(signedIn){ $("authView").classList.toggle("hide", signedIn); $("appView").classList.toggle("hide", !signedIn); }
+function authErr(e){ const m = {"auth/invalid-credential":"Wrong email or password.","auth/email-already-in-use":"This email already has an account.","auth/weak-password":"Password must be at least 6 characters.","auth/invalid-email":"Enter a valid email."}; $("aerr").textContent = m[e.code] || "Something went wrong. Try again."; }
+$("signin").onclick = () => signInWithEmailAndPassword(auth, $("em").value.trim(), $("pw").value).catch(authErr);
+$("signup").onclick = () => createUserWithEmailAndPassword(auth, $("em").value.trim(), $("pw").value).catch(authErr);
+$("out").onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, user => {
+  if (unsub) { unsub(); unsub = null; }
+  if (!user) { uid = null; tx = []; show(false); return; }
+  uid = user.uid; show(true); $("aerr").textContent = "";
+  unsub = onSnapshot(collection(db, "users", uid, "transactions"), snap => {
+    tx = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    render();
+  }, () => { $("err").textContent = "Cannot load data. Check your Firestore rules."; });
+});
+
+function fillCats(){ $("cat").innerHTML = (type === "e" ? EXP : INC).map(c => `<option>${c}</option>`).join(""); }
+function setType(t){ type = t; $("bE").className = t === "e" ? "on" : ""; $("bI").className = t === "i" ? "on" : ""; fillCats(); }
+$("bE").onclick = () => setType("e");
+$("bI").onclick = () => setType("i");
+$("month").onchange = e => { month = e.target.value; render(); };
+
+$("add").onclick = async () => {
+  const v = parseFloat($("amount").value);
+  if (!(v > 0)) { $("err").textContent = "Enter an amount greater than 0."; return; }
+  const date = $("date").value || today();
+  $("add").disabled = true;
+  try {
+    await addDoc(collection(db, "users", uid, "transactions"), { type, amount: Math.round(v*100)/100, cat: $("cat").value, date, note: $("note").value.trim(), createdAt: Date.now() });
+    $("amount").value = ""; $("note").value = ""; $("err").textContent = ""; month = date.slice(0,7);
+  } catch (e) { $("err").textContent = "Could not save. Check your connection and rules."; }
+  $("add").disabled = false;
+};
+$("amount").addEventListener("keydown", e => { if (e.key === "Enter") $("add").click(); });
+$("list").onclick = e => { const id = e.target.dataset && e.target.dataset.id; if (id) deleteDoc(doc(db, "users", uid, "transactions", id)); };
+
+function render(){
+  let all = 0; tx.forEach(t => all += t.type === "i" ? t.amount : -t.amount);
+  $("bal").textContent = fmt(all) + " " + CUR;
+  const set = new Set(tx.map(t => t.date.slice(0,7))); set.add(today().slice(0,7));
+  const ms = [...set].sort().reverse();
+  if (!month || !ms.includes(month)) month = ms[0];
+  $("month").innerHTML = ms.map(m => `<option value="${m}"${m === month ? " selected" : ""}>${mLabel(m)}</option>`).join("");
+  const cur = tx.filter(t => t.date.slice(0,7) === month);
+  let i = 0, e = 0; const by = {};
+  cur.forEach(t => { if (t.type === "i") i += t.amount; else { e += t.amount; by[t.cat] = (by[t.cat] || 0) + t.amount; } });
+  $("inc").textContent = fmt(i) + " " + CUR; $("exp").textContent = fmt(e) + " " + CUR;
+  const ks = Object.keys(by).sort((a,b) => by[b] - by[a]);
+  $("cats").innerHTML = ks.length ? ks.map(k => { const p = e ? by[k]/e*100 : 0; return `<div class="bar"><div class="t"><span>${esc(k)}</span><span>${fmt(by[k])} ${CUR} · ${Math.round(p)}%</span></div><div class="tr"><i style="width:${p}%"></i></div></div>`; }).join("") : `<div class="empty">No spending this month.</div>`;
+  const sorted = [...cur].sort((a,b) => b.date.localeCompare(a.date) || (b.createdAt||0) - (a.createdAt||0));
+  let h = "", last = "";
+  sorted.forEach(t => {
+    if (t.date !== last) { last = t.date; h += `<div class="day">${new Date(t.date + "T00:00:00").toLocaleDateString("en-US", {weekday:"long", month:"short", day:"numeric"})}</div>`; }
+    h += `<div class="tx"><div class="m"><b>${esc(t.cat)}</b>${t.note ? `<span>${esc(t.note)}</span>` : ""}</div><span class="amt ${t.type}">${t.type === "i" ? "+" : "−"}${fmt(t.amount)}</span><button class="del" data-id="${t.id}" aria-label="Delete">×</button></div>`;
+  });
+  $("list").innerHTML = h || `<div class="empty">Add your first transaction above.</div>`;
+}
+
+$("date").value = today(); setType("e");
+</script>
+</body>
+</html>
