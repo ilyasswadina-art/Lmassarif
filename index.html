@@ -49,6 +49,14 @@ input:focus,select:focus{outline:2px solid var(--acc);outline-offset:-1px}
 .auth{max-width:380px;margin:12vh auto 0}
 .auth h1{font-size:24px;margin:0 0 4px}.auth p{color:var(--mute);margin:0 0 8px}
 .warn{background:#fef3c7;border:1px solid #fcd34d;color:#78350f;border-radius:10px;padding:12px;font-size:14px;margin-bottom:14px}
+.tabs{display:flex;background:#ececef;border-radius:12px;padding:3px;margin-bottom:14px}
+.tabs button{flex:1;border:0;background:none;font:inherit;font-weight:600;color:var(--mute);padding:10px;border-radius:9px;cursor:pointer}
+.tabs button.on{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.pill{border:1px solid var(--line);background:var(--bg);color:var(--ink);font:inherit;font-size:13px;font-weight:600;padding:6px 10px;border-radius:999px;cursor:pointer}
+.owed .n{font-size:34px;font-weight:700;letter-spacing:-1px}
+.owed small{color:var(--mute)}
+.sub{font-size:13px;color:var(--mute);margin:12px 0 2px}
+.done .m b,.done .amt{color:var(--mute);text-decoration:line-through}
 </style>
 </head>
 <body>
@@ -72,7 +80,9 @@ input:focus,select:focus{outline:2px solid var(--acc);outline-offset:-1px}
   <!-- App -->
   <div id="appView" class="hide">
     <div class="top"><h1>Expense Tracker</h1><button class="link" id="out" type="button">Sign out</button></div>
+    <div class="tabs"><button class="on" id="tM" type="button">Money</button><button id="tL" type="button">Loans</button></div>
 
+    <div id="tabMain">
     <div class="card balance">
       <small>Current balance</small>
       <div class="n" id="bal">0 MAD</div>
@@ -106,13 +116,38 @@ input:focus,select:focus{outline:2px solid var(--acc);outline-offset:-1px}
       <h2>Transactions</h2>
       <div id="list"></div>
     </div>
+    </div>
+
+    <div id="tabLoans" class="hide">
+      <div class="card owed">
+        <small>People owe you</small>
+        <div class="n" id="owed">0 MAD</div>
+        <small id="owedSub"></small>
+      </div>
+      <div class="card">
+        <h2>Lend money</h2>
+        <label for="lp">Who</label>
+        <input id="lp" type="text" maxlength="40" placeholder="Name">
+        <div class="g2">
+          <div><label for="la">Amount (MAD)</label><input id="la" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00"></div>
+          <div><label for="ld">Date</label><input id="ld" type="date"></div>
+        </div>
+        <label for="ln">Note (optional)</label>
+        <input id="ln" type="text" maxlength="80" placeholder="e.g. For a phone repair">
+        <div class="msg" id="lerr"></div>
+        <button class="btn" id="ladd" type="button">Add loan</button>
+        <div class="empty" style="padding-bottom:0">Loans are kept apart: they do not change your balance.</div>
+      </div>
+      <div class="card"><h2>Not repaid yet</h2><div id="lopen"></div></div>
+      <div class="card"><h2>Repaid</h2><div id="ldone"></div></div>
+    </div>
   </div>
 </div>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { initializeFirestore, persistentLocalCache, collection, addDoc, deleteDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { initializeFirestore, persistentLocalCache, collection, addDoc, deleteDoc, updateDoc, doc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 // 1) PASTE YOUR FIREBASE CONFIG HERE (Firebase console > Project settings > Your apps > Web app)
 const firebaseConfig = {
@@ -147,14 +182,20 @@ $("signin").onclick = () => signInWithEmailAndPassword(auth, $("em").value.trim(
 $("signup").onclick = () => createUserWithEmailAndPassword(auth, $("em").value.trim(), $("pw").value).catch(authErr);
 $("out").onclick = () => signOut(auth);
 
+let loans = [], unsubL = null;
 onAuthStateChanged(auth, user => {
   if (unsub) { unsub(); unsub = null; }
-  if (!user) { uid = null; tx = []; show(false); return; }
+  if (unsubL) { unsubL(); unsubL = null; }
+  if (!user) { uid = null; tx = []; loans = []; show(false); return; }
   uid = user.uid; show(true); $("aerr").textContent = "";
   unsub = onSnapshot(collection(db, "users", uid, "transactions"), snap => {
     tx = snap.docs.map(d => ({ id: d.id, ...d.data() }));
     render();
   }, () => { $("err").textContent = "Cannot load data. Check your Firestore rules."; });
+  unsubL = onSnapshot(collection(db, "users", uid, "loans"), snap => {
+    loans = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    renderLoans();
+  }, () => { $("lerr").textContent = "Cannot load loans. Check your Firestore rules."; });
 });
 
 function fillCats(){ $("cat").innerHTML = (type === "e" ? EXP : INC).map(c => `<option>${c}</option>`).join(""); }
@@ -199,7 +240,39 @@ function render(){
   $("list").innerHTML = h || `<div class="empty">Add your first transaction above.</div>`;
 }
 
-$("date").value = today(); setType("e");
+function tab(t){ $("tabMain").classList.toggle("hide", t !== "m"); $("tabLoans").classList.toggle("hide", t !== "l"); $("tM").className = t === "m" ? "on" : ""; $("tL").className = t === "l" ? "on" : ""; }
+$("tM").onclick = () => tab("m");
+$("tL").onclick = () => tab("l");
+
+$("ladd").onclick = async () => {
+  const who = $("lp").value.trim(), v = parseFloat($("la").value);
+  if (!who) { $("lerr").textContent = "Enter a name."; return; }
+  if (!(v > 0)) { $("lerr").textContent = "Enter an amount greater than 0."; return; }
+  $("ladd").disabled = true;
+  try {
+    await addDoc(collection(db, "users", uid, "loans"), { person: who, amount: Math.round(v*100)/100, date: $("ld").value || today(), note: $("ln").value.trim(), repaid: false, createdAt: Date.now() });
+    $("lp").value = ""; $("la").value = ""; $("ln").value = ""; $("lerr").textContent = "";
+  } catch (e) { $("lerr").textContent = "Could not save. Check your connection and rules."; }
+  $("ladd").disabled = false;
+};
+$("tabLoans").onclick = e => {
+  const r = e.target.dataset && e.target.dataset.repay, d = e.target.dataset && e.target.dataset.ldel;
+  if (r) updateDoc(doc(db, "users", uid, "loans", r), { repaid: true, repaidAt: Date.now() });
+  if (d && confirm("Delete this loan?")) deleteDoc(doc(db, "users", uid, "loans", d));
+};
+function renderLoans(){
+  const open = loans.filter(l => !l.repaid), done = loans.filter(l => l.repaid);
+  const sum = open.reduce((s, l) => s + l.amount, 0);
+  const ppl = new Set(open.map(l => l.person.toLowerCase())).size;
+  $("owed").textContent = fmt(sum) + " " + CUR;
+  $("owedSub").textContent = open.length ? `${open.length} open loan${open.length > 1 ? "s" : ""} · ${ppl} ${ppl > 1 ? "people" : "person"}` : "Nobody owes you anything.";
+  const row = (l, cls) => `<div class="tx ${cls}"><div class="m"><b>${esc(l.person)}</b><span>${new Date(l.date + "T00:00:00").toLocaleDateString("en-US", {month:"short", day:"numeric", year:"numeric"})}${l.note ? " · " + esc(l.note) : ""}</span></div><span class="amt">${fmt(l.amount)}</span>${l.repaid ? "" : `<button class="pill" data-repay="${l.id}">Repaid</button>`}<button class="del" data-ldel="${l.id}" aria-label="Delete">×</button></div>`;
+  const by = (a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0);
+  $("lopen").innerHTML = open.length ? open.sort(by).map(l => row(l, "")).join("") : `<div class="empty">No open loans.</div>`;
+  $("ldone").innerHTML = done.length ? done.sort(by).map(l => row(l, "done")).join("") : `<div class="empty">Nothing here yet.</div>`;
+}
+
+$("date").value = today(); $("ld").value = today(); setType("e");
 </script>
 </body>
 </html>
