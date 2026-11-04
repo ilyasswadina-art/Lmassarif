@@ -7,8 +7,8 @@
 <title>Expense Tracker</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
 <style>
-:root{--bg:#f3f5f9;--sf:#fff;--ink:#0f1b2d;--mute:#64748b;--line:#e3e8f0;--brand:#14295c;--on:#fff;--soft:#eef2fb;--inc:#047857;--exp:#b91c1c;--hero:#14295c;color-scheme:light}
-@media (prefers-color-scheme:dark){:root{--bg:#0b1220;--sf:#131c2e;--ink:#e6ecf5;--mute:#8ea0b8;--line:#223047;--brand:#6b95f0;--on:#0b1220;--soft:#1a2740;--inc:#34d399;--exp:#f87171;--hero:#1b3166;color-scheme:dark}}
+:root{--c1:#0d9488;--c2:#2f5bd6;--bg:#f3f5f9;--sf:#fff;--ink:#0f1b2d;--mute:#64748b;--line:#e3e8f0;--brand:#14295c;--on:#fff;--soft:#eef2fb;--inc:#047857;--exp:#b91c1c;--hero:#14295c;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--c1:#2dd4bf;--c2:#6b95f0;--bg:#0b1220;--sf:#131c2e;--ink:#e6ecf5;--mute:#8ea0b8;--line:#223047;--brand:#6b95f0;--on:#0b1220;--soft:#1a2740;--inc:#34d399;--exp:#f87171;--hero:#1b3166;color-scheme:dark}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
 .wrap{max-width:720px;margin:0 auto;padding:calc(14px + env(safe-area-inset-top,0px)) 16px calc(96px + env(safe-area-inset-bottom,0px))}
@@ -32,6 +32,14 @@ h2{font-size:15px;font-weight:600;margin:0 0 12px}
 label{display:block;font-size:13px;font-weight:500;color:var(--mute);margin:12px 0 4px}
 input,select{width:100%;font:inherit;color:var(--ink);background:var(--sf);border:1px solid var(--line);border-radius:10px;padding:11px 12px;min-height:44px}
 input:focus,select:focus,button:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.acc{display:flex;align-items:center;gap:16px}
+.donut{width:132px;flex:none}.donut svg{width:100%;display:block}
+.legend{flex:1;display:grid;gap:14px}
+.lg{display:flex;gap:10px;align-items:flex-start}
+.sw{width:10px;height:10px;border-radius:3px;margin-top:6px;flex:none}
+.nm{font-size:13px;color:var(--mute)}
+.lg b{font-size:16px;font-variant-numeric:tabular-nums}
+td.t{color:var(--ink)}
 .amt-row{display:flex;gap:8px}
 .dotbtn{flex:none;width:50px;border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:10px;font:inherit;font-size:24px;font-weight:700;cursor:pointer}
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -109,13 +117,21 @@ nav.tabs svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1
       </div>
 
       <div class="card">
+        <h2>Where your money is</h2>
+        <div class="acc"><div id="donut" class="donut"></div><div id="legend" class="legend"></div></div>
+      </div>
+
+      <div class="card">
         <h2>New transaction</h2>
-        <div class="seg"><button class="on" id="bE" type="button">Expense</button><button id="bI" type="button">Income</button></div>
+        <div class="seg"><button class="on" id="bE" type="button">Expense</button><button id="bI" type="button">Income</button><button id="bT" type="button">Transfer</button></div>
+        <label id="acl" style="margin-top:0">Account</label>
+        <div class="seg" id="acctSeg"><button class="on" data-a="0" type="button">Cash</button><button data-a="1" type="button">Bank Muscat</button></div>
+        <div class="sub" id="thint" style="margin:-6px 0 4px"></div>
         <label for="amount">Amount (OMR)</label>
         <div class="amt-row"><input id="amount" type="text" inputmode="numeric" autocomplete="off" placeholder="0.000"><button class="dotbtn" type="button" data-dot="amount" aria-label="Decimal point">.</button></div>
-        <label for="cat">Category</label>
+        <div id="catBlock"><label for="cat">Category</label>
         <input id="cat" type="text" maxlength="30" placeholder="Type a category or pick one" autocomplete="off">
-        <div class="chips" id="chips"></div>
+        <div class="chips" id="chips"></div></div>
         <div class="g2">
           <div><label for="date">Date</label><input id="date" type="date"></div>
           <div><label for="note">Note (optional)</label><input id="note" type="text" maxlength="80"></div>
@@ -180,6 +196,7 @@ const firebaseConfig = {
 const CUR = "OMR";
 const EXP = ["Food","Transport","Rent","Bills","Health","Education","Shopping","Fun","Other"];
 const INC = ["Salary","Freelance","Gift","Other"];
+const ACC = ["Cash","Bank Muscat"];
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const fmt = n => n.toLocaleString("en-US", {minimumFractionDigits:3, maximumFractionDigits:3});
@@ -213,7 +230,7 @@ document.addEventListener("click", e => {
   el.focus();
 });
 
-let tx = [], loans = [], type = "e", ldir = "l", month = "", uid = null, unsub = null, unsubL = null;
+let tx = [], loans = [], acct = ACC[0], type = "e", ldir = "l", month = "", uid = null, unsub = null, unsubL = null;
 
 if (firebaseConfig.apiKey === "YOUR_API_KEY") { $("cfgWarn").classList.remove("hide"); throw new Error("Firebase config missing"); }
 
@@ -251,7 +268,28 @@ function chips(){
   $("chips").innerHTML = used.concat(defs).slice(0, 10).map(c => `<button type="button" class="chip" data-c="${esc(c)}">${esc(c)}</button>`).join("");
 }
 $("chips").onclick = e => { const c = e.target.dataset && e.target.dataset.c; if (c) $("cat").value = c; };
-function setType(t){ type = t; $("bE").className = t === "e" ? "on" : ""; $("bI").className = t === "i" ? "on" : ""; $("cat").value = ""; chips(); }
+function setAcct(){ [...$("acctSeg").children].forEach((b, k) => b.className = ACC[k] === acct ? "on" : ""); $("acl").textContent = type === "t" ? "From" : "Account"; $("thint").textContent = type === "t" ? "Moves money to " + ACC.find(x => x !== acct) : ""; }
+function setType(t){ type = t; $("bE").className = t === "e" ? "on" : ""; $("bI").className = t === "i" ? "on" : ""; $("bT").className = t === "t" ? "on" : ""; $("cat").value = ""; $("catBlock").classList.toggle("hide", t === "t"); setAcct(); chips(); }
+$("bT").onclick = () => setType("t");
+$("acctSeg").onclick = e => { const a = e.target.dataset && e.target.dataset.a; if (a === undefined) return; acct = ACC[+a]; setAcct(); };
+const aOf = t => ACC.includes(t.acct) ? t.acct : ACC[0];
+function balances(){
+  const b = {}; ACC.forEach(a => b[a] = 0);
+  tx.forEach(t => { const a = aOf(t);
+    if (t.type === "i") b[a] += t.amount;
+    else if (t.type === "e") b[a] -= t.amount;
+    else if (t.type === "t") { b[a] -= t.amount; b[ACC.includes(t.to) ? t.to : ACC.find(x => x !== a)] += t.amount; } });
+  return b;
+}
+function renderAccts(){
+  const b = balances(), total = ACC.reduce((s, a) => s + b[a], 0);
+  const pos = ACC.map(a => Math.max(0, b[a])), ps = pos.reduce((s, x) => s + x, 0);
+  let cum = 0;
+  const segs = ACC.map((a, i) => { const p = ps ? pos[i] / ps * 100 : 0; const el = p ? `<circle r="15.915" cx="21" cy="21" fill="none" style="stroke:var(--c${i + 1})" stroke-width="5" stroke-dasharray="${p} ${100 - p}" stroke-dashoffset="${25 - cum}"/>` : ""; cum += p; return el; }).join("");
+  const big = (total < 0 ? "−" : "") + fmt(Math.abs(total)), fs = big.length > 10 ? 3.2 : big.length > 8 ? 3.8 : 4.4;
+  $("donut").innerHTML = `<svg viewBox="0 0 42 42" role="img" aria-label="Money by account"><circle r="15.915" cx="21" cy="21" fill="none" style="stroke:var(--line)" stroke-width="5"/>${segs}<text x="21" y="19.5" text-anchor="middle" style="fill:var(--mute)" font-size="2.6">Total</text><text x="21" y="24.5" text-anchor="middle" style="fill:var(--ink)" font-size="${fs}" font-weight="700">${big}</text></svg>`;
+  $("legend").innerHTML = ACC.map((a, i) => `<div class="lg"><span class="sw" style="background:var(--c${i + 1})"></span><div><div class="nm">${esc(a)}</div><b class="${b[a] < 0 ? "e" : ""}">${b[a] < 0 ? "−" : ""}${fmt(Math.abs(b[a]))} ${CUR}</b><div class="sub">${ps ? Math.round(pos[i] / ps * 100) : 0}%</div></div></div>`).join("");
+}
 $("bE").onclick = () => setType("e");
 $("bI").onclick = () => setType("i");
 $("month").onchange = e => { month = e.target.value; render(); };
@@ -262,7 +300,9 @@ $("add").onclick = async () => {
   const date = $("date").value || today();
   $("add").disabled = true;
   try {
-    await addDoc(collection(db, "users", uid, "transactions"), { type, amount: Math.round(v * 1000) / 1000, cat: $("cat").value.trim() || "Other", date, note: $("note").value.trim(), createdAt: Date.now() });
+    const o = { type, acct, amount: Math.round(v * 1000) / 1000, cat: type === "t" ? "Transfer" : ($("cat").value.trim() || "Other"), date, note: $("note").value.trim(), createdAt: Date.now() };
+    if (type === "t") o.to = ACC.find(x => x !== acct);
+    await addDoc(collection(db, "users", uid, "transactions"), o);
     $("amount").value = ""; $("note").value = ""; $("cat").value = ""; $("err").textContent = ""; month = date.slice(0, 7);
   } catch (e) { $("err").textContent = "Could not save. Check your connection and rules."; }
   $("add").disabled = false;
@@ -271,7 +311,7 @@ $("amount").addEventListener("keydown", e => { if (e.key === "Enter") $("add").c
 $("list").onclick = e => { const id = e.target.dataset && e.target.dataset.id; if (id) deleteDoc(doc(db, "users", uid, "transactions", id)); };
 
 function render(){
-  let all = 0; tx.forEach(t => all += t.type === "i" ? t.amount : -t.amount);
+  const bb = balances(), all = ACC.reduce((s, a) => s + bb[a], 0);
   $("bal").textContent = fmt(all) + " " + CUR;
   const set = new Set(tx.map(t => t.date.slice(0, 7))); set.add(today().slice(0, 7));
   const ms = [...set].sort().reverse();
@@ -279,14 +319,14 @@ function render(){
   $("month").innerHTML = ms.map(m => `<option value="${m}"${m === month ? " selected" : ""}>${mLabel(m)}</option>`).join("");
   const cur = tx.filter(t => t.date.slice(0, 7) === month);
   let i = 0, e = 0; const by = {};
-  cur.forEach(t => { if (t.type === "i") i += t.amount; else { e += t.amount; const k = t.cat.toLowerCase(); (by[k] = by[k] || {l:t.cat, v:0}).v += t.amount; } });
+  cur.forEach(t => { if (t.type === "i") i += t.amount; else if (t.type === "e") { e += t.amount; const k = t.cat.toLowerCase(); (by[k] = by[k] || {l:t.cat, v:0}).v += t.amount; } });
   $("inc").textContent = fmt(i) + " " + CUR; $("exp").textContent = fmt(e) + " " + CUR;
   const ks = Object.values(by).sort((a, b) => b.v - a.v);
   $("cats").innerHTML = ks.length ? ks.map(o => { const p = e ? o.v / e * 100 : 0; return `<div class="bar"><div class="t"><span>${esc(o.l)}</span><span>${fmt(o.v)} ${CUR} · ${Math.round(p)}%</span></div><div class="tr"><i style="width:${p}%"></i></div></div>`; }).join("") : `<div class="empty">No spending this month.</div>`;
   const sorted = [...cur].sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt || 0) - (a.createdAt || 0));
-  const rows = sorted.map(t => `<tr><td class="d">${dshort(t.date)}</td><td><b>${esc(t.cat)}</b></td><td class="n"><span>${esc(t.note || "")}</span></td><td class="a ${t.type}">${t.type === "i" ? "+" : "−"}${fmt(t.amount)}</td><td class="x"><button class="del" data-id="${t.id}" aria-label="Delete">×</button></td></tr>`).join("");
+  const rows = sorted.map(t => `<tr><td class="d">${dshort(t.date)}</td><td><b>${esc(t.cat)}</b><div class="sub">${t.type === "t" ? esc(aOf(t)) + " → " + esc(t.to || "") : esc(aOf(t))}</div></td><td class="n"><span>${esc(t.note || "")}</span></td><td class="a ${t.type}">${t.type === "i" ? "+" : t.type === "e" ? "−" : ""}${fmt(t.amount)}</td><td class="x"><button class="del" data-id="${t.id}" aria-label="Delete">×</button></td></tr>`).join("");
   $("list").innerHTML = rows ? `<div class="tw"><table><thead><tr><th>Date</th><th>Category</th><th>Note</th><th class="a">Amount</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>` : `<div class="empty">No transactions this month.</div>`;
-  chips();
+  chips(); renderAccts();
 }
 
 $("dL").onclick = () => { ldir = "l"; $("dL").className = "on"; $("dB").className = ""; };
@@ -327,7 +367,7 @@ function renderLoans(){
   $("ldone").innerHTML = tbl(done, false, "Nothing settled yet.");
 }
 
-$("date").value = today(); $("ld").value = today(); setType("e");
+$("date").value = today(); $("ld").value = today(); setType("e"); renderAccts();
 </script>
 </body>
 </html>
